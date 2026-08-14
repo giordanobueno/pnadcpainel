@@ -16,9 +16,9 @@ gerar_painel_pnadc(
 \arguments{
 \item{ano}{Ano de referencia (inteiro). Deve estar entre 2012 e o ano atual.}
 
-\item{vars_tri}{Vetor opcional de variaveis trimestrais a baixar. Se NULL, utiliza \code{vars_tri_default}.}
+\item{vars_tri}{Vetor de variaveis trimestrais a baixar. Se NULL (padrao), utiliza \code{vars_tri_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas da PNADc trimestral.}
 
-\item{vars_visita}{Vetor opcional de variaveis de Visita 1 a baixar. Se NULL, utiliza \code{vars_visita_default}.}
+\item{vars_visita}{Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao), utiliza \code{vars_visita_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas de Visita 1.}
 
 \item{balancear}{Logico. Se TRUE (padrao), remove linhas do painel onde qualquer variavel oriunda de \code{vars_visita} esteja com NA, garantindo um painel balanceado e retangular.}
 
@@ -36,8 +36,21 @@ com a metodologia Data Zoom (PUC-Rio).
 }
 \examples{
 \dontrun{
+# Uso padrao (variaveis essenciais)
 painel_2023 <- gerar_painel_pnadc(ano = 2023)
-diag <- attr(painel_2023, "diagnostico")
-print(diag)
+
+# Selecao customizada de variaveis
+painel_custom <- gerar_painel_pnadc(
+  ano = 2023,
+  vars_tri = c("V2009", "VD4020"),
+  vars_visita = c("VD5002", "S01006")
+)
+
+# Baixar TODAS as variaveis dos microdados
+painel_completo <- gerar_painel_pnadc(
+  ano = 2023,
+  vars_tri = "todas",
+  vars_visita = "todas"
+)
 }
 }

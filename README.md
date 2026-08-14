@@ -1,6 +1,6 @@
 # pnadcpainel: Painel Consolidado da PNAD Contínua (IBGE)
 
-[![R-CMD-check](https://img.shields.io/badge/R-package-blue.svg)](https://github.com/)
+[![R-CMD-check](https://img.shields.io/badge/R-package-blue.svg)](https://github.com/giordanobueno/pnadcpainel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 O pacote **`pnadcpainel`** automatiza o download de microdados da **PNAD Contínua (IBGE)** via pacote `PNADcIBGE`, aplica a metodologia de identificação longitudinal de domicílios e indivíduos do **Data Zoom (PUC-Rio)**, cruza a base trimestral com a base de Visita 1 (características domiciliares, programas sociais e renda domiciliar per capita) e realiza diagnóstico e balanceamento do painel.
@@ -9,14 +9,11 @@ O pacote **`pnadcpainel`** automatiza o download de microdados da **PNAD Contín
 
 ## 🚀 Instalação
 
-Você pode instalar a versão de desenvolvimento do **`pnadcpainel`** diretamente do GitHub usando o `devtools`:
+Você pode instalar o **`pnadcpainel`** diretamente do GitHub usando o `remotes` ou `devtools`:
 
 ```r
-# Instalar devtools se ainda nao tiver
-if (!require("devtools")) install.packages("devtools")
-
-# Instalar o pacote
-devtools::install_github("seu-usuario/pnadcpainel")
+if (!require("remotes")) install.packages("remotes")
+remotes::install_github("giordanobueno/pnadcpainel", force = TRUE)
 ```
 
 ---
@@ -26,7 +23,7 @@ devtools::install_github("seu-usuario/pnadcpainel")
 ```r
 library(pnadcpainel)
 
-# Gerar painel retangular e balanceado para o ano de 2023
+# Gerar painel retangular e balanceado para o ano de 2023 (utilizando variaveis essenciais padrao)
 painel_2023 <- gerar_painel_pnadc(ano = 2023)
 
 # Visualizar as primeiras linhas
@@ -35,6 +32,34 @@ head(painel_2023)
 # Inspecionar a tabela de diagnostico de preenchimento de colunas
 diag_2023 <- attr(painel_2023, "diagnostico")
 print(diag_2023)
+```
+
+---
+
+## 🎨 Customização de Variáveis
+
+O usuário pode escolher exatamente quais colunas deseja importar através dos parâmetros `vars_tri` (base trimestral) e `vars_visita` (base de habitação/Visita 1):
+
+### 1. Importar Apenas Variáveis Específicas (Recomendado para Economia de Memória)
+As colunas de identificação necessárias para o painel (`id_dom`, `id_ind`, `UPA`, `V1008`, etc.) são incluídas automaticamente, mesmo que você especifique apenas as suas variáveis de interesse:
+
+```r
+painel_custom <- gerar_painel_pnadc(
+  ano = 2023,
+  vars_tri = c("V2009", "VD4002", "VD4020"),      # Idade, ocupacao e rendimento
+  vars_visita = c("VD5002", "V5002A", "S01006")  # Renda per capita, Bolsa Familia e dormitorios
+)
+```
+
+### 2. Importar TODAS as Variáveis da PNAD Contínua
+Para importar todos os microdados sem nenhuma restrição de colunas, passe `"todas"` ou `"all"`:
+
+```r
+painel_completo <- gerar_painel_pnadc(
+  ano = 2023,
+  vars_tri = "todas",
+  vars_visita = "todas"
+)
 ```
 
 ---

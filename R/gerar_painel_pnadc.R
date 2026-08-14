@@ -5,8 +5,8 @@
 #' com a metodologia Data Zoom (PUC-Rio).
 #'
 #' @param ano Ano de referencia (inteiro). Deve estar entre 2012 e o ano atual.
-#' @param vars_tri Vetor opcional de variaveis trimestrais a baixar. Se NULL, utiliza \code{vars_tri_default}.
-#' @param vars_visita Vetor opcional de variaveis de Visita 1 a baixar. Se NULL, utiliza \code{vars_visita_default}.
+#' @param vars_tri Vetor de variaveis trimestrais a baixar. Se NULL (padrao), utiliza \code{vars_tri_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas da PNADc trimestral.
+#' @param vars_visita Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao), utiliza \code{vars_visita_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas de Visita 1.
 #' @param balancear Logico. Se TRUE (padrao), remove linhas do painel onde qualquer variavel oriunda de \code{vars_visita} esteja com NA, garantindo um painel balanceado e retangular.
 #' @param low_memory Logico. Se TRUE, grava intermediarios trimestrais em disco temporario para economizar memoria RAM.
 #' @param verbose Logico. Se TRUE (padrao), exibe mensagens informativas e de diagnostico no console.
@@ -17,9 +17,22 @@
 #'
 #' @examples
 #' \dontrun{
+#' # Uso padrao (variaveis essenciais)
 #' painel_2023 <- gerar_painel_pnadc(ano = 2023)
-#' diag <- attr(painel_2023, "diagnostico")
-#' print(diag)
+#'
+#' # Selecao customizada de variaveis
+#' painel_custom <- gerar_painel_pnadc(
+#'   ano = 2023,
+#'   vars_tri = c("V2009", "VD4020"),
+#'   vars_visita = c("VD5002", "S01006")
+#' )
+#'
+#' # Baixar TODAS as variaveis dos microdados
+#' painel_completo <- gerar_painel_pnadc(
+#'   ano = 2023,
+#'   vars_tri = "todas",
+#'   vars_visita = "todas"
+#' )
 #' }
 gerar_painel_pnadc <- function(ano,
                                vars_tri = NULL,
@@ -42,18 +55,30 @@ gerar_painel_pnadc <- function(ano,
     stop(sprintf("Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.", ano, ano_atual))
   }
 
-  # Defaults
+  # Tratar vars_tri (garantir chaves de ID Data Zoom)
+  chaves_obrig_tri <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF", "Ano", "Trimestre")
   if (is.null(vars_tri)) {
-    vars_tri <- vars_tri_default
+    vars_tri_proc <- vars_tri_default
+  } else if (is.character(vars_tri) && length(vars_tri) == 1 && tolower(vars_tri) %in% c("all", "todas", "tudo")) {
+    vars_tri_proc <- NULL # NULL indica para get_pnadc baixar todas as colunas
+  } else {
+    vars_tri_proc <- unique(c(chaves_obrig_tri, vars_tri))
   }
+
+  # Tratar vars_visita (garantir chaves de id_dom)
+  chaves_obrig_visita <- c("UPA", "V1008", "V1014", "Ano", "UF")
   if (is.null(vars_visita)) {
-    vars_visita <- vars_visita_default
+    vars_visita_proc <- vars_visita_default
+  } else if (is.character(vars_visita) && length(vars_visita) == 1 && tolower(vars_visita) %in% c("all", "todas", "tudo")) {
+    vars_visita_proc <- NULL # NULL indica para get_pnadc baixar todas as colunas
+  } else {
+    vars_visita_proc <- unique(c(chaves_obrig_visita, vars_visita))
   }
 
   # 2. Processar base trimestral
   painel_pessoas <- baixar_trimestres_pnadc(
     ano = ano,
-    vars_tri = vars_tri,
+    vars_tri = vars_tri_proc,
     low_memory = low_memory,
     verbose = verbose
   )
@@ -61,7 +86,7 @@ gerar_painel_pnadc <- function(ano,
   # 3. Processar base de habitacao (Visita 1)
   base_habitacao <- consolidar_base_habitacao(
     ano = ano,
-    vars_visita = vars_visita,
+    vars_visita = vars_visita_proc,
     verbose = verbose
   )
 
@@ -74,12 +99,19 @@ gerar_painel_pnadc <- function(ano,
   gc()
 
   # 5. Diagnostico de preenchimento
-  chaves_hab <- c("UPA", "V1008", "V1014", "Ano", "UF")
-  vars_hab_especificas <- setdiff(vars_visita, chaves_hab)
+  vars_hab_especificas <- setdiff(names(painel_cruzado), names(painel_cruzado)[1:ncol(painel_cruzado)])
+  if (is.null(vars_visita_proc)) {
+    # Todas as colunas vindas de Visita 1 exceto id_dom e chaves
+    vars_hab_especificas <- setdiff(names(painel_cruzado), c(names(vars_tri_default), "id_dom", "id_ind", chaves_obrig_visita))
+  } else {
+    vars_hab_especificas <- setdiff(vars_visita_proc, chaves_obrig_visita)
+  }
+  vars_hab_especificas <- intersect(vars_hab_especificas, names(painel_cruzado))
+
   diag_tb <- diagnosticar_painel(painel_cruzado, colunas = vars_hab_especificas)
 
   # 6. Balanceamento do painel
-  if (balancear) {
+  if (balancear && length(vars_hab_especificas) > 0) {
     painel_final <- painel_cruzado %>%
       dplyr::filter(dplyr::if_all(dplyr::all_of(vars_hab_especificas), ~ !is.na(.)))
   } else {
@@ -87,7 +119,7 @@ gerar_painel_pnadc <- function(ano,
   }
 
   # Emissao de mensagem de diagnostico
-  if (verbose) {
+  if (verbose && nrow(diag_tb) > 0) {
     mensagem_diagnostico(
       diagnostico = diag_tb,
       painel_antes = painel_cruzado,
