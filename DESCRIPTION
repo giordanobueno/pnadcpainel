@@ -8,8 +8,9 @@ Description: Baixa microdados da PNAD Continua (IBGE), aplica a metodologia
     diagnostico e balanceamento do painel.
 License: MIT + file LICENSE
 Encoding: UTF-8
+Depends:
+    PNADcIBGE
 Imports:
-    PNADcIBGE,
     dplyr,
     tidyr,
     stringr,

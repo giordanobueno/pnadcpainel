@@ -27,6 +27,12 @@ gerar_painel_pnadc <- function(ano,
                                balancear = TRUE,
                                low_memory = FALSE,
                                verbose = TRUE) {
+  # Garantir que PNADcIBGE esteja anexado ao search path (requerido por PNADcIBGE::get_pnadc)
+  if (!"package:PNADcIBGE" %in% search()) {
+    suppressPackageStartupMessages(requireNamespace("PNADcIBGE", quietly = TRUE))
+    try(attachNamespace("PNADcIBGE"), quietly = TRUE)
+  }
+
   # 1. Validacao de ano
   ano_atual <- as.integer(format(Sys.Date(), "%Y"))
   if (missing(ano) || is.null(ano) || !is.numeric(ano) || length(ano) != 1 || is.na(ano)) {

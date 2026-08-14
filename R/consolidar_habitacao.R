@@ -13,6 +13,11 @@
 #' @importFrom rlang .data
 #' @export
 consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, verbose = TRUE) {
+  if (!"package:PNADcIBGE" %in% search()) {
+    suppressPackageStartupMessages(requireNamespace("PNADcIBGE", quietly = TRUE))
+    try(attachNamespace("PNADcIBGE"), quietly = TRUE)
+  }
+
   dados_casa_lista <- list()
 
   # 1. Ano corrente
