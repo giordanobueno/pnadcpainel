@@ -63,3 +63,22 @@ test_that("gerar_painel_pnadc exclui colunas trimestrais de vars_hab_especificas
   expect_false("V2009" %in% vars_hab_especificas)
   expect_false("VD4020" %in% vars_hab_especificas)
 })
+
+test_that("balancear = TRUE preserva linhas com VD4020 = NA mas remove linhas com VD5002 = NA", {
+  painel_mock <- data.frame(
+    id_dom = c("D1", "D2", "D3"),
+    id_ind = c("I1", "I2", "I3"),
+    V2009  = c(5, 35, 40),          # I1 e crianca (5 anos)
+    VD4020 = c(NA, 3000, 2000),     # I1 tem VD4020 = NA
+    VD5002 = c(1000, 1000, NA),     # D3 nao casou na Visita 1 (VD5002 = NA)
+    S01013 = c(1, 1, NA),
+    stringsAsFactors = FALSE
+  )
+
+  vars_hab <- c("VD5002", "S01013")
+  painel_bal <- painel_mock %>% dplyr::filter(dplyr::if_all(dplyr::all_of(vars_hab), ~ !is.na(.)))
+
+  expect_equal(nrow(painel_bal), 2)
+  expect_equal(painel_bal$id_ind, c("I1", "I2")) # Preservou I1 (crianca com VD4020 = NA)
+  expect_false("I3" %in% painel_bal$id_ind)      # Removeu I3 (falha na Visita 1)
+})
