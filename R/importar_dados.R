@@ -34,10 +34,6 @@ vars_visita_default <- c(
 #' @return Data frame consolidado das pessoas nos 4 trimestres.
 #' @keywords internal
 baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory = FALSE, verbose = TRUE) {
-  if (!"package:PNADcIBGE" %in% search()) {
-    suppressPackageStartupMessages(library(PNADcIBGE))
-  }
-
   lista_painel <- vector("list", 4L)
   temp_files <- character(4L)
 

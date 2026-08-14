@@ -12,6 +12,7 @@
 #'   adicionadas, e as colunas auxiliares de data (\code{V2008}, \code{V20081}, \code{V20082})
 #'   removidas para economia de memoria RAM.
 #'
+#' @import PNADcIBGE
 #' @importFrom dplyr filter mutate select
 #' @importFrom stringr str_pad
 #' @importFrom magrittr %>%

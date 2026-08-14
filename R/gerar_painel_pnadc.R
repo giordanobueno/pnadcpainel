@@ -40,12 +40,7 @@ gerar_painel_pnadc <- function(ano,
                                balancear = TRUE,
                                low_memory = FALSE,
                                verbose = TRUE) {
-  # Garantir que PNADcIBGE esteja anexado ao search path do R
-  if (!"package:PNADcIBGE" %in% search()) {
-    suppressPackageStartupMessages(library(PNADcIBGE))
-  }
-
-  # 1. Validacao de ano
+  # 1. Validacao de ano (Achado 3: validar ano antes de carregar bibliotecas)
   ano_atual <- as.integer(format(Sys.Date(), "%Y"))
   if (missing(ano) || is.null(ano) || !is.numeric(ano) || length(ano) != 1 || is.na(ano)) {
     stop("O argumento 'ano' deve ser um unico numero inteiro valido.")
@@ -98,11 +93,11 @@ gerar_painel_pnadc <- function(ano,
   rm(painel_pessoas, base_habitacao)
   gc()
 
-  # 5. Diagnostico de preenchimento
-  vars_hab_especificas <- setdiff(names(painel_cruzado), names(painel_cruzado)[1:ncol(painel_cruzado)])
+  # 5. Diagnostico de preenchimento (Achados 2 e 4: remocao de codigo morto e correcao de nomes)
   if (is.null(vars_visita_proc)) {
-    # Todas as colunas vindas de Visita 1 exceto id_dom e chaves
-    vars_hab_especificas <- setdiff(names(painel_cruzado), c(names(vars_tri_default), "id_dom", "id_ind", chaves_obrig_visita))
+    # Se vars_visita="todas", excluir colunas vindas da base trimestral + chaves
+    cols_excluir <- c("id_dom", "id_ind", chaves_obrig_visita, if (is.null(vars_tri_proc)) NULL else vars_tri_proc)
+    vars_hab_especificas <- setdiff(names(painel_cruzado), cols_excluir)
   } else {
     vars_hab_especificas <- setdiff(vars_visita_proc, chaves_obrig_visita)
   }

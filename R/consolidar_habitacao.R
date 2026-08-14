@@ -13,10 +13,6 @@
 #' @importFrom rlang .data
 #' @export
 consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, verbose = TRUE) {
-  if (!"package:PNADcIBGE" %in% search()) {
-    suppressPackageStartupMessages(library(PNADcIBGE))
-  }
-
   dados_casa_lista <- list()
 
   # 1. Ano corrente
@@ -79,7 +75,11 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
   }
 
   chaves <- c("UPA", "V1008", "V1014", "Ano", "UF")
-  vars_hab_especificas <- setdiff(vars_visita, chaves)
+  if (is.null(vars_visita)) {
+    vars_hab_especificas <- setdiff(names(dados_casa_total), chaves)
+  } else {
+    vars_hab_especificas <- setdiff(vars_visita, chaves)
+  }
 
   base_habitacao <- dados_casa_total %>%
     dplyr::mutate(id_dom = paste0(.data$UPA, .data$V1008, .data$V1014)) %>%
