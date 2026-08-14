@@ -1,0 +1,23 @@
+Package: pnadcpainel
+Title: Painel Consolidado Pessoa e Domicilio da PNAD Continua
+Version: 0.1.0
+Authors@R: person("Giordano", "Bueno", role = c("aut", "cre"), email = "contato@example.com")
+Description: Baixa microdados da PNAD Continua (IBGE), aplica a metodologia
+    de identificacao longitudinal de domicilios e individuos do Data Zoom (PUC-Rio),
+    cruza a base trimestral com a base de Visita 1 (domicilios) e realiza
+    diagnostico e balanceamento do painel.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    PNADcIBGE,
+    dplyr,
+    tidyr,
+    stringr,
+    magrittr,
+    rlang,
+    stats
+Suggests:
+    testthat (>= 3.0.0),
+    arrow
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
