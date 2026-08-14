@@ -27,10 +27,9 @@ gerar_painel_pnadc <- function(ano,
                                balancear = TRUE,
                                low_memory = FALSE,
                                verbose = TRUE) {
-  # Garantir que PNADcIBGE esteja anexado ao search path (requerido por PNADcIBGE::get_pnadc)
+  # Garantir que PNADcIBGE esteja anexado ao search path do R
   if (!"package:PNADcIBGE" %in% search()) {
-    suppressPackageStartupMessages(requireNamespace("PNADcIBGE", quietly = TRUE))
-    try(attachNamespace("PNADcIBGE"), quietly = TRUE)
+    suppressPackageStartupMessages(library(PNADcIBGE))
   }
 
   # 1. Validacao de ano

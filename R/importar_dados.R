@@ -35,8 +35,7 @@ vars_visita_default <- c(
 #' @keywords internal
 baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory = FALSE, verbose = TRUE) {
   if (!"package:PNADcIBGE" %in% search()) {
-    suppressPackageStartupMessages(requireNamespace("PNADcIBGE", quietly = TRUE))
-    try(attachNamespace("PNADcIBGE"), quietly = TRUE)
+    suppressPackageStartupMessages(library(PNADcIBGE))
   }
 
   lista_painel <- vector("list", 4L)
