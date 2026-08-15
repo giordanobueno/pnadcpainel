@@ -7,6 +7,15 @@ O pacote **`pnadcpainel`** automatiza o download de microdados da **PNAD Contín
 
 ---
 
+## 📌 Também disponível em Python
+
+Este pacote possui uma versão equivalente oficial em **Python**:
+👉 **[giordanobueno/pnadcpainel-py (Versão Python)](https://github.com/giordanobueno/pnadcpainel-py)**
+
+A sintaxe, os nomes de funções e parâmetros foram mantidos idênticos para que a transição entre R e Python seja simples e direta.
+
+---
+
 ## 🚀 Instalação
 
 Você pode instalar o **`pnadcpainel`** diretamente do GitHub usando o `remotes` ou `devtools`:
