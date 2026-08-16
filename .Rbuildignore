@@ -4,3 +4,7 @@
 ^IMCF_RAM_Otimizada in R\.R$
 ^\.gemini$
 ^\.agents$
+^\.lintr$
+^\.github$
+^pnadcpainel-py$
+

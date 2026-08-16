@@ -21,7 +21,8 @@ importFrom(dplyr,
   mutate,
   n,
   select,
-  summarise
+  summarise,
+  tibble
 )
 importFrom(magrittr,"%>%")
 importFrom(rlang,.data)

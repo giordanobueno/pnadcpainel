@@ -33,7 +33,10 @@ vars_visita_default <- c(
 #' @param verbose Logico. Se TRUE, exibe mensagens de progresso.
 #' @return Data frame consolidado das pessoas nos 4 trimestres.
 #' @keywords internal
-baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory = FALSE, verbose = TRUE) {
+baixar_trimestres_pnadc <- function(ano,
+                                    vars_tri = vars_tri_default,
+                                    low_memory = FALSE,
+                                    verbose = TRUE) {
   lista_painel <- vector("list", 4L)
   temp_files <- character(4L)
 
@@ -42,13 +45,18 @@ baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory
       message(">>> Processando Trimestre ", tri, " de ", ano, "...")
     }
 
-    dados_brutos <- PNADcIBGE::get_pnadc(
+    dados_brutos <- get_pnadc_internal(
       year    = ano,
       quarter = tri,
       vars    = vars_tri,
       design  = FALSE,
-      labels  = FALSE
+      labels  = FALSE,
+      verbose = verbose
     )
+
+    if (is.null(dados_brutos) || nrow(dados_brutos) == 0L) {
+      stop(sprintf("Download vazio ou nulo para o Trimestre %d de %d.", tri, ano))
+    }
 
     dados_brutos <- downcast_pnadc(dados_brutos)
     dados_proc <- criar_ids_datazoom(dados_brutos)
@@ -84,5 +92,5 @@ baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory
     gc()
   }
 
-  return(painel_pessoas)
+  painel_pessoas
 }

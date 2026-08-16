@@ -5,34 +5,25 @@
 #' com a metodologia Data Zoom (PUC-Rio).
 #'
 #' @param ano Ano de referencia (inteiro). Deve estar entre 2012 e o ano atual.
-#' @param vars_tri Vetor de variaveis trimestrais a baixar. Se NULL (padrao), utiliza \code{vars_tri_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas da PNADc trimestral.
-#' @param vars_visita Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao), utiliza \code{vars_visita_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas de Visita 1.
-#' @param balancear Logico. Se TRUE (padrao), remove linhas do painel onde qualquer variavel oriunda de \code{vars_visita} esteja com NA, garantindo um painel balanceado e retangular.
-#' @param low_memory Logico. Se TRUE, grava intermediarios trimestrais em disco temporario para economizar memoria RAM.
-#' @param verbose Logico. Se TRUE (padrao), exibe mensagens informativas e de diagnostico no console.
+#' @param vars_tri Vetor de variaveis trimestrais a baixar. Se NULL (padrao),
+#'   utiliza \code{vars_tri_default}. Se \code{"todas"}, \code{"all"} ou \code{"tudo"},
+#'   baixa todas as colunas da PNADc trimestral.
+#' @param vars_visita Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao),
+#'   utiliza \code{vars_visita_default}. Se \code{"todas"}, \code{"all"} ou \code{"tudo"},
+#'   baixa todas as colunas de Visita 1.
+#' @param balancear Logico. Se TRUE (padrao), remove linhas do painel onde qualquer
+#'   variavel oriunda de Visita 1 selecionada esteja com NA, garantindo painel retangular.
+#' @param low_memory Logico. Se TRUE, grava intermediarios trimestrais em disco temporario.
+#' @param verbose Logico. Se TRUE (padrao), exibe mensagens informativas e de diagnostico.
 #'
-#' @return Um tibble consolidado contendo as informacoes de pessoas e domicilios. O objeto possui o atributo \code{"diagnostico"} contendo a tabela de preenchimento.
+#' @return Um tibble consolidado contendo as informacoes de pessoas e domicilios.
+#'   O objeto possui o atributo \code{"diagnostico"} contendo a tabela de preenchimento.
 #' @importFrom dplyr left_join filter if_all all_of
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Uso padrao (variaveis essenciais)
 #' painel_2023 <- gerar_painel_pnadc(ano = 2023)
-#'
-#' # Selecao customizada de variaveis
-#' painel_custom <- gerar_painel_pnadc(
-#'   ano = 2023,
-#'   vars_tri = c("V2009", "VD4020"),
-#'   vars_visita = c("VD5002", "S01006")
-#' )
-#'
-#' # Baixar TODAS as variaveis dos microdados
-#' painel_completo <- gerar_painel_pnadc(
-#'   ano = 2023,
-#'   vars_tri = "todas",
-#'   vars_visita = "todas"
-#' )
 #' }
 gerar_painel_pnadc <- function(ano,
                                vars_tri = NULL,
@@ -40,34 +31,67 @@ gerar_painel_pnadc <- function(ano,
                                balancear = TRUE,
                                low_memory = FALSE,
                                verbose = TRUE) {
-  # 1. Validacao de ano (Achado 3: validar ano antes de carregar bibliotecas)
+  # 1. Validacao estrita de argumentos de entrada
   ano_atual <- as.integer(format(Sys.Date(), "%Y"))
-  if (missing(ano) || is.null(ano) || !is.numeric(ano) || length(ano) != 1 || is.na(ano)) {
-    stop("O argumento 'ano' deve ser um unico numero inteiro valido.")
+  if (missing(ano) || is.null(ano) || length(ano) != 1L || any(is.na(ano)) ||
+      any(is.nan(ano)) || any(is.infinite(ano)) || !is.numeric(ano)) {
+    stop("O argumento 'ano' deve ser um unico numero inteiro valido.", call. = FALSE)
+  }
+  if (ano != suppressWarnings(as.integer(ano))) {
+    stop("O argumento 'ano' deve ser um numero inteiro valido.", call. = FALSE)
   }
   ano <- as.integer(ano)
-  if (ano < 2012 || ano > ano_atual) {
-    stop(sprintf("Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.", ano, ano_atual))
+  if (ano < 2012L || ano > ano_atual) {
+    stop(sprintf(
+      "Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.",
+      ano, ano_atual
+    ), call. = FALSE)
   }
 
-  # Tratar vars_tri (garantir chaves de ID Data Zoom)
+  if (!is.logical(balancear) || length(balancear) != 1L || is.na(balancear)) {
+    stop("O argumento 'balancear' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
+  if (!is.logical(low_memory) || length(low_memory) != 1L || is.na(low_memory)) {
+    stop("O argumento 'low_memory' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
+  if (!is.logical(verbose) || length(verbose) != 1L || is.na(verbose)) {
+    stop("O argumento 'verbose' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
+
+  # Tratar e validar vars_tri
   chaves_obrig_tri <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF", "Ano", "Trimestre")
   if (is.null(vars_tri)) {
     vars_tri_proc <- vars_tri_default
-  } else if (is.character(vars_tri) && length(vars_tri) == 1 && tolower(vars_tri) %in% c("all", "todas", "tudo")) {
-    vars_tri_proc <- NULL # NULL indica para get_pnadc baixar todas as colunas
+  } else if (is.character(vars_tri)) {
+    if (length(vars_tri) == 0L) {
+      stop("O argumento 'vars_tri' nao pode ser um vetor vazio.", call. = FALSE)
+    }
+    if (length(vars_tri) == 1L && tolower(vars_tri) %in% c("all", "todas", "tudo")) {
+      vars_tri_proc <- NULL
+    } else {
+      vars_tri_proc <- unique(c(chaves_obrig_tri, vars_tri))
+    }
   } else {
-    vars_tri_proc <- unique(c(chaves_obrig_tri, vars_tri))
+    msg_err <- "O argumento 'vars_tri' deve ser NULL, 'todas' ou um vetor de caracteres com nomes de variaveis."
+    stop(msg_err, call. = FALSE)
   }
 
-  # Tratar vars_visita (garantir chaves de id_dom)
+  # Tratar e validar vars_visita
   chaves_obrig_visita <- c("UPA", "V1008", "V1014", "Ano", "UF")
   if (is.null(vars_visita)) {
     vars_visita_proc <- vars_visita_default
-  } else if (is.character(vars_visita) && length(vars_visita) == 1 && tolower(vars_visita) %in% c("all", "todas", "tudo")) {
-    vars_visita_proc <- NULL # NULL indica para get_pnadc baixar todas as colunas
+  } else if (is.character(vars_visita)) {
+    if (length(vars_visita) == 0L) {
+      stop("O argumento 'vars_visita' nao pode ser um vetor vazio.", call. = FALSE)
+    }
+    if (length(vars_visita) == 1L && tolower(vars_visita) %in% c("all", "todas", "tudo")) {
+      vars_visita_proc <- NULL
+    } else {
+      vars_visita_proc <- unique(c(chaves_obrig_visita, vars_visita))
+    }
   } else {
-    vars_visita_proc <- unique(c(chaves_obrig_visita, vars_visita))
+    msg_err <- "O argumento 'vars_visita' deve ser NULL, 'todas' ou um vetor de caracteres com nomes de variaveis."
+    stop(msg_err, call. = FALSE)
   }
 
   # 2. Processar base trimestral
@@ -93,9 +117,8 @@ gerar_painel_pnadc <- function(ano,
   rm(painel_pessoas, base_habitacao)
   gc()
 
-  # 5. Diagnostico de preenchimento (Achados 2 e 4: remocao de codigo morto e correcao de nomes)
+  # 5. Diagnostico de preenchimento
   if (is.null(vars_visita_proc)) {
-    # Se vars_visita="todas", excluir colunas vindas da base trimestral + chaves
     cols_excluir <- c("id_dom", "id_ind", chaves_obrig_visita, if (is.null(vars_tri_proc)) NULL else vars_tri_proc)
     vars_hab_especificas <- setdiff(names(painel_cruzado), cols_excluir)
   } else {
@@ -106,7 +129,7 @@ gerar_painel_pnadc <- function(ano,
   diag_tb <- diagnosticar_painel(painel_cruzado, colunas = vars_hab_especificas)
 
   # 6. Balanceamento do painel
-  if (balancear && length(vars_hab_especificas) > 0) {
+  if (balancear && length(vars_hab_especificas) > 0L) {
     painel_final <- painel_cruzado %>%
       dplyr::filter(dplyr::if_all(dplyr::all_of(vars_hab_especificas), ~ !is.na(.)))
   } else {
@@ -114,7 +137,7 @@ gerar_painel_pnadc <- function(ano,
   }
 
   # Emissao de mensagem de diagnostico
-  if (verbose && nrow(diag_tb) > 0) {
+  if (verbose && nrow(diag_tb) > 0L) {
     mensagem_diagnostico(
       diagnostico = diag_tb,
       painel_antes = painel_cruzado,
@@ -126,5 +149,5 @@ gerar_painel_pnadc <- function(ano,
   # Anexar atributo de diagnostico
   attr(painel_final, "diagnostico") <- diag_tb
 
-  return(painel_final)
+  painel_final
 }

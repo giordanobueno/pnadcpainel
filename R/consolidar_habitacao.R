@@ -12,7 +12,9 @@
 #' @importFrom dplyr mutate select group_by summarise across all_of bind_rows
 #' @importFrom rlang .data
 #' @export
-consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, verbose = TRUE) {
+consolidar_base_habitacao <- function(ano,
+                                       vars_visita = vars_visita_default,
+                                       verbose = TRUE) {
   dados_casa_lista <- list()
 
   # 1. Ano corrente
@@ -21,46 +23,58 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
   }
   casa_corrente <- tryCatch(
     {
-      df <- PNADcIBGE::get_pnadc(
+      df <- get_pnadc_internal(
         year      = ano,
         interview = 1,
         vars      = vars_visita,
         design    = FALSE,
-        labels    = FALSE
+        labels    = FALSE,
+        verbose   = verbose
       )
+      if (is.null(df) || nrow(df) == 0L) {
+        stop(sprintf("Download de Visita 1 para o ano %d retornou vazio.", ano))
+      }
       downcast_pnadc(df)
     },
     error = function(e) {
-      stop("Falha ao baixar dados de Visita 1 para o ano ", ano, ": ", e$message)
+      stop("Falha ao baixar dados de Visita 1 para o ano ", ano, ": ", e$message, call. = FALSE)
     }
   )
   dados_casa_lista[[1]] <- casa_corrente
 
-  # 2. Ano anterior (caso de borda: ex 2012)
-  ano_anterior <- ano - 1
-  casa_anterior <- tryCatch(
-    {
-      if (verbose) {
-        message(">>> Baixando Habitacao ", ano_anterior, " (Visita 1)...")
+  # 2. Ano anterior (caso de borda: ex 2012 onde 2011 nao existe)
+  ano_anterior <- ano - 1L
+  casa_anterior <- NULL
+  if (ano_anterior >= 2012L) {
+    casa_anterior <- tryCatch(
+      {
+        if (verbose) {
+          message(">>> Baixando Habitacao ", ano_anterior, " (Visita 1)...")
+        }
+        df <- get_pnadc_internal(
+          year      = ano_anterior,
+          interview = 1,
+          vars      = vars_visita,
+          design    = FALSE,
+          labels    = FALSE,
+          verbose   = verbose
+        )
+        if (!is.null(df) && nrow(df) > 0L) {
+          downcast_pnadc(df)
+        } else {
+          NULL
+        }
+      },
+      error = function(e) {
+        warning(
+          "Nao foi possivel baixar dados de Visita 1 para o ano anterior (", ano_anterior, "). ",
+          "A consolidacao sera realizada apenas com os dados de ", ano, ". Erro: ", e$message,
+          call. = FALSE
+        )
+        NULL
       }
-      df <- PNADcIBGE::get_pnadc(
-        year      = ano_anterior,
-        interview = 1,
-        vars      = vars_visita,
-        design    = FALSE,
-        labels    = FALSE
-      )
-      downcast_pnadc(df)
-    },
-    error = function(e) {
-      warning(
-        "Nao foi possivel baixar dados de Visita 1 para o ano anterior (", ano_anterior, "). ",
-        "A consolidacao sera realizada apenas com os dados de ", ano, ". Erro: ", e$message,
-        call. = FALSE
-      )
-      NULL
-    }
-  )
+    )
+  }
 
   if (!is.null(casa_anterior)) {
     dados_casa_lista[[2]] <- casa_anterior
@@ -90,7 +104,7 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
         dplyr::all_of(vars_hab_especificas),
         ~ {
           v <- stats::na.omit(.x)
-          if (length(v) > 0) v[1] else .x[1]
+          if (length(v) > 0L) v[1L] else .x[1L]
         }
       ),
       .groups = "drop"
@@ -99,5 +113,5 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
   rm(dados_casa_total)
   gc()
 
-  return(base_habitacao)
+  base_habitacao
 }

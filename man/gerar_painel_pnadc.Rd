@@ -16,18 +16,24 @@ gerar_painel_pnadc(
 \arguments{
 \item{ano}{Ano de referencia (inteiro). Deve estar entre 2012 e o ano atual.}
 
-\item{vars_tri}{Vetor de variaveis trimestrais a baixar. Se NULL (padrao), utiliza \code{vars_tri_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas da PNADc trimestral.}
+\item{vars_tri}{Vetor de variaveis trimestrais a baixar. Se NULL (padrao),
+utiliza \code{vars_tri_default}. Se \code{"todas"}, \code{"all"} ou \code{"tudo"},
+baixa todas as colunas da PNADc trimestral.}
 
-\item{vars_visita}{Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao), utiliza \code{vars_visita_default}. Se \code{"todas"} ou \code{"all"}, baixa todas as colunas de Visita 1.}
+\item{vars_visita}{Vetor de variaveis de Visita 1 a baixar. Se NULL (padrao),
+utiliza \code{vars_visita_default}. Se \code{"todas"}, \code{"all"} ou \code{"tudo"},
+baixa todas as colunas de Visita 1.}
 
-\item{balancear}{Logico. Se TRUE (padrao), remove linhas do painel onde qualquer variavel oriunda de \code{vars_visita} esteja com NA, garantindo um painel balanceado e retangular.}
+\item{balancear}{Logico. Se TRUE (padrao), remove linhas do painel onde qualquer
+variavel oriunda de Visita 1 selecionada esteja com NA, garantindo painel retangular.}
 
-\item{low_memory}{Logico. Se TRUE, grava intermediarios trimestrais em disco temporario para economizar memoria RAM.}
+\item{low_memory}{Logico. Se TRUE, grava intermediarios trimestrais em disco temporario.}
 
-\item{verbose}{Logico. Se TRUE (padrao), exibe mensagens informativas e de diagnostico no console.}
+\item{verbose}{Logico. Se TRUE (padrao), exibe mensagens informativas e de diagnostico.}
 }
 \value{
-Um tibble consolidado contendo as informacoes de pessoas e domicilios. O objeto possui o atributo \code{"diagnostico"} contendo a tabela de preenchimento.
+Um tibble consolidado contendo as informacoes de pessoas e domicilios.
+  O objeto possui o atributo \code{"diagnostico"} contendo a tabela de preenchimento.
 }
 \description{
 Baixa e cruza a base trimestral de pessoas com a base de Visita 1 de domicilios
@@ -36,21 +42,6 @@ com a metodologia Data Zoom (PUC-Rio).
 }
 \examples{
 \dontrun{
-# Uso padrao (variaveis essenciais)
 painel_2023 <- gerar_painel_pnadc(ano = 2023)
-
-# Selecao customizada de variaveis
-painel_custom <- gerar_painel_pnadc(
-  ano = 2023,
-  vars_tri = c("V2009", "VD4020"),
-  vars_visita = c("VD5002", "S01006")
-)
-
-# Baixar TODAS as variaveis dos microdados
-painel_completo <- gerar_painel_pnadc(
-  ano = 2023,
-  vars_tri = "todas",
-  vars_visita = "todas"
-)
 }
 }
