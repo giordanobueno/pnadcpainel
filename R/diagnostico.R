@@ -8,7 +8,7 @@
 #'
 #' @return Um tibble contendo as colunas: \code{variavel}, \code{total_linhas},
 #'   \code{com_dado}, \code{sem_dado}, \code{pct_disponivel}.
-#' @importFrom dplyr select group_by summarise arrange desc mutate n
+#' @importFrom dplyr select group_by summarise arrange desc mutate n tibble
 #' @importFrom tidyr pivot_longer
 #' @importFrom rlang .data
 #' @export
@@ -19,8 +19,18 @@ diagnosticar_painel <- function(painel, colunas = NULL) {
     colunas <- intersect(colunas, names(painel))
   }
 
-  if (length(colunas) == 0) {
-    stop("Nenhuma coluna valida fornecida para diagnostico.")
+  if (length(colunas) == 0L) {
+    stop("Nenhuma coluna valida fornecida para diagnostico.", call. = FALSE)
+  }
+
+  if (nrow(painel) == 0L) {
+    return(dplyr::tibble(
+      variavel       = colunas,
+      total_linhas   = 0L,
+      com_dado       = 0L,
+      sem_dado       = 0L,
+      pct_disponivel = 0.0
+    ))
   }
 
   diag_tb <- painel %>%
@@ -31,12 +41,12 @@ diagnosticar_painel <- function(painel, colunas = NULL) {
       total_linhas   = dplyr::n(),
       com_dado       = sum(!is.na(.data$valor)),
       sem_dado       = sum(is.na(.data$valor)),
-      pct_disponivel = round((sum(!is.na(.data$valor)) / dplyr::n()) * 100, 2),
+      pct_disponivel = if (dplyr::n() > 0L) round((sum(!is.na(.data$valor)) / dplyr::n()) * 100, 2) else 0.0,
       .groups = "drop"
     ) %>%
-    dplyr::arrange(.data$pct_disponivel)
+    dplyr::arrange(.data$pct_disponivel, .data$variavel)
 
-  return(diag_tb)
+  diag_tb
 }
 
 #' Imprimir Mensagem Padronizada de Diagnostico de Perda de Dados
@@ -52,14 +62,19 @@ diagnosticar_painel <- function(painel, colunas = NULL) {
 #' @return A string formatada da mensagem (invisivelmente).
 #' @export
 mensagem_diagnostico <- function(diagnostico, painel_antes, painel_depois, ano) {
-  n_antes <- nrow(painel_antes)
-  n_depois <- nrow(painel_depois)
+  n_antes <- if (!is.null(painel_antes)) nrow(painel_antes) else 0L
+  n_depois <- if (!is.null(painel_depois)) nrow(painel_depois) else 0L
   perda_abs <- n_antes - n_depois
-  perda_pct <- round((perda_abs / max(n_antes, 1)) * 100, 2)
+  perda_pct <- if (n_antes > 0L) round((perda_abs / n_antes) * 100, 2) else 0.0
 
-  var_critica_row <- diagnostico[1, ]
-  var_critica <- var_critica_row$variavel
-  pct_ausente_critica <- round(100 - var_critica_row$pct_disponivel, 2)
+  if (!is.null(diagnostico) && nrow(diagnostico) > 0L) {
+    var_critica_row <- diagnostico[1L, ]
+    var_critica <- var_critica_row$variavel
+    pct_ausente_critica <- round(100 - var_critica_row$pct_disponivel, 2)
+  } else {
+    var_critica <- "Nenhuma"
+    pct_ausente_critica <- 0.0
+  }
 
   msg <- sprintf(
     paste0(
