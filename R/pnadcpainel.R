@@ -1,8 +1,24 @@
+# Global environment para armazenamento de opções internas (ex: mock provider)
+.pnadcpainel_env <- new.env(parent = emptyenv())
+
+#' Define o Provider de Mock para Testes de Download
+#'
+#' @param provider Função de mock recebendo (year, quarter, interview, vars, design, labels, verbose) ou NULL.
+#' @export
+set_mock_provider <- function(provider = NULL) {
+  .pnadcpainel_env$mock_provider <- provider
+  invisible(provider)
+}
+
+#' Retorna o Provider de Mock Ativo
+#'
+#' @return Função de mock ativada ou NULL.
+#' @export
+get_mock_provider <- function() {
+  .pnadcpainel_env$mock_provider
+}
+
 #' Variaveis padrao trimestrais da PNAD Contínua
-#'
-#' Lista contendo as variaveis padrao da base trimestral utilizadas para
-#' construcao do painel de pessoas.
-#'
 #' @export
 vars_tri_default <- c(
   "UPA", "V1008", "V1014", "Ano", "Trimestre", "UF",
@@ -13,10 +29,6 @@ vars_tri_default <- c(
 )
 
 #' Variaveis padrao de Visita 1 (Domicilio) da PNAD Contínua
-#'
-#' Lista contendo as variaveis padrao da base de Visita 1 utilizadas para
-#' caracterizacao domiciliar e rendimento per capita.
-#'
 #' @export
 vars_visita_default <- c(
   "UPA", "V1008", "V1014", "Ano", "UF",
@@ -27,13 +39,8 @@ vars_visita_default <- c(
 
 #' Otimizacao de Memoria (Downcasting) para Microdados PNADc
 #'
-#' Converte colunas numericas e categoricas dos microdados para tipo integer
-#' economizando memoria RAM.
-#'
 #' @param df Data frame contendo microdados da PNADc.
-#'
 #' @return Data frame com colunas otimizadas para integer.
-#' @importFrom dplyr mutate across all_of intersect
 #' @export
 downcast_pnadc <- function(df) {
   colunas_int <- c(
@@ -45,20 +52,72 @@ downcast_pnadc <- function(df) {
     "S01013", "S01006", "S01010",
     "Ano", "Trimestre", "UF"
   )
-  cols_presentes <- dplyr::intersect(colunas_int, names(df))
-  df %>% dplyr::mutate(dplyr::across(dplyr::all_of(cols_presentes), as.integer))
+
+  df_res <- df
+  cols_presentes <- intersect(colunas_int, names(df_res))
+
+  for (col in cols_presentes) {
+    x <- df_res[[col]]
+
+    # Se a coluna for numerica (double/integer), checar se ha fracionarios
+    if (is.numeric(x)) {
+      x_valid <- x[!is.na(x) & !is.nan(x) & !is.infinite(x)]
+      if (length(x_valid) > 0L) {
+        if (any(x_valid %% 1 != 0)) {
+          stop(sprintf("Valores fracionarios nao sao permitidos em colunas inteiras (coluna '%s').", col), call. = FALSE)
+        }
+        if (any(x_valid > 2147483647 | x_valid < -2147483647)) {
+          stop(sprintf("Valor fora do intervalo inteiro de 32-bits (coluna '%s').", col), call. = FALSE)
+        }
+      }
+      df_res[[col]] <- as.integer(x)
+    } else if (is.character(x)) {
+      # Tentar converter strings numericas
+      x_clean <- gsub("\\.0$", "", x)
+      num_vals <- suppressWarnings(as.numeric(x_clean))
+      x_valid <- num_vals[!is.na(num_vals) & !is.nan(num_vals) & !is.infinite(num_vals)]
+      if (length(x_valid) > 0L) {
+        if (any(x_valid %% 1 != 0)) {
+          stop(sprintf("Valores fracionarios nao sao permitidos em colunas inteiras (coluna '%s').", col), call. = FALSE)
+        }
+        if (any(x_valid > 2147483647 | x_valid < -2147483647)) {
+          stop(sprintf("Valor fora do intervalo inteiro de 32-bits (coluna '%s').", col), call. = FALSE)
+        }
+      }
+      if (any(is.na(num_vals) & !is.na(x) & nchar(trimws(x)) > 0)) {
+        warning(sprintf("Strings nao numericas encontradas na coluna '%s' foram convertidas para NA.", col), call. = FALSE)
+      }
+      df_res[[col]] <- as.integer(num_vals)
+    }
+  }
+
+  df_res
+}
+
+#' Helper de Normalizacao String sem .0
+#' @keywords internal
+.norm_str <- function(s) {
+  s_str <- as.character(s)
+  s_clean <- gsub("\\.0$", "", s_str)
+  s_clean[is.na(s) | s_clean == "NA" | nchar(trimws(s_clean)) == 0L] <- NA_character_
+  s_clean
+}
+
+#' Helper de Zero Padding (2 digitos)
+#' @keywords internal
+.pad2 <- function(s) {
+  s_clean <- .norm_str(s)
+  idx_valid <- !is.na(s_clean)
+  res <- character(length(s))
+  res[!idx_valid] <- NA_character_
+  res[idx_valid] <- stringr::str_pad(s_clean[idx_valid], width = 2, pad = "0")
+  res
 }
 
 #' Criar Identificadores Longitudinais Data Zoom
 #'
-#' Aplica a metodologia desenvolvida pelo Data Zoom (PUC-Rio) para construcao
-#' dos identificadores longitudinais de domicilio (id_dom) e individuo (id_ind).
-#'
 #' @param dados Data frame contendo os microdados da PNADc.
-#'
 #' @return Data frame com id_dom e id_ind adicionados.
-#' @importFrom dplyr filter mutate select stringr
-#' @importFrom rlang .data
 #' @export
 criar_ids_datazoom <- function(dados) {
   chaves_obrig <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF")
@@ -67,33 +126,76 @@ criar_ids_datazoom <- function(dados) {
     stop(paste("Colunas obrigatorias ausentes para criar IDs Data Zoom:", paste(faltantes, collapse = ", ")), call. = FALSE)
   }
 
-  dados %>%
-    dplyr::filter(
-      !is.na(.data$V2008),
-      !is.na(.data$V20081),
-      !is.na(.data$V20082),
-      !is.na(.data$V2007),
-      .data$V2008 != 99L,
-      .data$V20081 != 99L,
-      .data$V20082 != 9999L
-    ) %>%
-    dplyr::mutate(
-      id_dom = paste0(.data$UPA, stringr::str_pad(.data$V1008, width = 2, pad = "0"), .data$V1014),
-      id_ind = paste0(
-        .data$id_dom,
-        stringr::str_pad(.data$V2008,  width = 2, pad = "0"),
-        stringr::str_pad(.data$V20081, width = 2, pad = "0"),
-        .data$V20082, .data$V2007, .data$UF
-      )
-    ) %>%
-    dplyr::select(-.data$V2008, -.data$V20081, -.data$V20082)
+  df <- dados
+
+  # Normalizacao e validacao estrita dos 8 componentes chave
+  upa_str   <- .norm_str(df$UPA)
+  v1008_str <- .pad2(df$V1008)
+  v1014_str <- .norm_str(df$V1014)
+  uf_str    <- .norm_str(df$UF)
+
+  v2007_str  <- .norm_str(df$V2007)
+  v2008_num  <- suppressWarnings(as.numeric(.norm_str(df$V2008)))
+  v20081_num <- suppressWarnings(as.numeric(.norm_str(df$V20081)))
+  v20082_num <- suppressWarnings(as.numeric(.norm_str(df$V20082)))
+
+  v2008_str  <- .pad2(df$V2008)
+  v20081_str <- .pad2(df$V20081)
+  v20082_str <- .norm_str(df$V20082)
+
+  # Regra estrita: qualquer componente nulo ou data sentinela invalida (99, 9999) remove a linha
+  mascara_valida <- (
+    !is.na(upa_str) &
+    !is.na(v1008_str) &
+    !is.na(v1014_str) &
+    !is.na(uf_str) &
+    !is.na(v2007_str) &
+    !is.na(v2008_num) &
+    !is.na(v20081_num) &
+    !is.na(v20082_num) &
+    v2008_num != 99 &
+    v20081_num != 99 &
+    v20082_num != 9999
+  )
+
+  df_valido <- df[mascara_valida, , drop = FALSE]
+
+  if (nrow(df_valido) == 0L) {
+    df_res <- df_valido
+    df_res$id_dom <- character(0)
+    df_res$id_ind <- character(0)
+    cols_remov <- intersect(c("V2008", "V20081", "V20082"), names(df_res))
+    if (length(cols_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_remov, drop = FALSE]
+    return(df_res)
+  }
+
+  upa_v   <- upa_str[mascara_valida]
+  v1008_v <- v1008_str[mascara_valida]
+  v1014_v <- v1014_str[mascara_valida]
+  uf_v    <- uf_str[mascara_valida]
+  v2007_v <- v2007_str[mascara_valida]
+  dia_v   <- v2008_str[mascara_valida]
+  mes_v   <- v20081_str[mascara_valida]
+  ano_v   <- v20082_str[mascara_valida]
+
+  id_dom <- paste0(upa_v, v1008_v, v1014_v)
+  id_ind <- paste0(id_dom, dia_v, mes_v, ano_v, v2007_v, uf_v)
+
+  df_res <- df_valido
+  df_res$id_dom <- id_dom
+  df_res$id_ind <- id_ind
+
+  cols_remov <- intersect(c("V2008", "V20081", "V20082"), names(df_res))
+  if (length(cols_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_remov, drop = FALSE]
+
+  df_res
 }
 
 #' Diagnosticar Preenchimento de Colunas no Painel
 #'
 #' @param painel Data frame contendo o painel cruzado.
 #' @param colunas Vetor de nomes de colunas a diagnosticar.
-#' @return Um tibble com metricas de preenchimento.
+#' @return Um tibble com metricas de preenchimento ordenadas deterministicamente.
 #' @export
 diagnosticar_painel <- function(painel, colunas = NULL) {
   if (is.null(colunas)) {
@@ -107,13 +209,14 @@ diagnosticar_painel <- function(painel, colunas = NULL) {
   }
 
   if (nrow(painel) == 0L) {
-    return(dplyr::tibble(
-      variavel       = colunas,
+    res_empty <- dplyr::tibble(
+      variavel       = as.character(colunas),
       total_linhas   = 0L,
       com_dado       = 0L,
       sem_dado       = 0L,
       pct_disponivel = 0.0
-    ))
+    )
+    return(res_empty %>% dplyr::arrange(.data$pct_disponivel, .data$variavel))
   }
 
   painel %>%
@@ -131,12 +234,6 @@ diagnosticar_painel <- function(painel, colunas = NULL) {
 }
 
 #' Imprimir Mensagem Padronizada de Diagnostico
-#'
-#' @param diagnostico Tibble gerado por diagnosticar_painel.
-#' @param painel_antes Data frame do painel antes do balanceamento.
-#' @param painel_depois Data frame do painel apos o balanceamento.
-#' @param ano Ano de referencia.
-#' @return A string formatada da mensagem.
 #' @export
 mensagem_diagnostico <- function(diagnostico, painel_antes, painel_depois, ano) {
   n_antes <- if (!is.null(painel_antes)) nrow(painel_antes) else 0L
@@ -146,7 +243,7 @@ mensagem_diagnostico <- function(diagnostico, painel_antes, painel_depois, ano) 
 
   if (!is.null(diagnostico) && nrow(diagnostico) > 0L) {
     var_critica_row <- diagnostico[1L, ]
-    var_critica <- var_critica_row$variavel
+    var_critica <- as.character(var_critica_row$variavel)
     pct_ausente_critica <- round(100 - var_critica_row$pct_disponivel, 2)
   } else {
     var_critica <- "Nenhuma"
@@ -212,9 +309,14 @@ executar_com_retry <- function(expr, max_tentativas = 3L, delay_inicial = 1.0, v
   }
 }
 
-#' Wrapper Interno com Fallback para get_pnadc
+#' Wrapper Interno com Suporte a Mock Provider e Retry
 #' @keywords internal
 get_pnadc_internal <- function(year, quarter = NULL, interview = NULL, vars = NULL, design = FALSE, labels = FALSE, verbose = TRUE) {
+  mock <- get_mock_provider()
+  if (!is.null(mock) && is.function(mock)) {
+    return(mock(year = year, quarter = quarter, interview = interview, vars = vars, design = design, labels = labels, verbose = verbose))
+  }
+
   rotulo <- if (!is.null(quarter)) sprintf("Download Trimestre %d/%d", quarter, year) else sprintf("Download Visita %d/%d", interview, year)
   executar_com_retry(
     expr = function() {
@@ -254,6 +356,10 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
     get_pnadc_internal(year = ano, interview = 1, vars = if (is.character(vars_visita)) vars_visita else NULL, design = FALSE, labels = FALSE, verbose = verbose),
     error = function(e) stop(sprintf("Falha ao baixar dados de Visita 1 para o ano %d: %s", ano, e$message), call. = FALSE)
   )
+
+  if (is.null(dados_casa_corrente) || nrow(dados_casa_corrente) == 0L) {
+    stop(sprintf("Download de Visita 1 para o ano %d retornou vazio.", ano), call. = FALSE)
+  }
   dados_casa_lista[[1]] <- downcast_pnadc(dados_casa_corrente)
 
   ano_anterior <- ano - 1L
@@ -264,7 +370,7 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
       dados_casa_lista[[2]] <- downcast_pnadc(dados_casa_ant)
     }
   }, error = function(e) {
-    if (verbose) warning(sprintf("Nao foi possivel baixar dados de Visita 1 para o ano anterior (%d). A consolidacao sera realizada apenas com os dados de %d. Erro: %s", ano_anterior, ano, e$message), call. = FALSE)
+    warning(sprintf("Nao foi possivel baixar dados de Visita 1 para o ano anterior (%d). A consolidacao sera realizada apenas com os dados de %d. Erro: %s", ano_anterior, ano, e$message), call. = FALSE)
   })
 
   dados_casa_total <- dplyr::bind_rows(dados_casa_lista)
@@ -304,10 +410,12 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
 #' @export
 gerar_painel_pnadc <- function(ano, vars_tri = NULL, vars_visita = NULL, balancear = TRUE, low_memory = FALSE, verbose = TRUE) {
   ano_atual <- as.integer(format(Sys.Date(), "%Y"))
-  if (missing(ano) || is.null(ano) || length(ano) != 1L || any(is.na(ano)) || any(is.nan(ano)) || any(is.infinite(ano)) || !is.numeric(ano)) {
+
+  # Validação estrita de ano
+  if (missing(ano) || is.null(ano) || is.logical(ano) || length(ano) != 1L || any(is.na(ano)) || any(is.nan(ano)) || any(is.infinite(ano)) || !is.numeric(ano)) {
     stop("O argumento 'ano' deve ser um unico numero inteiro valido.", call. = FALSE)
   }
-  if (ano != suppressWarnings(as.integer(ano))) {
+  if (ano %% 1 != 0) {
     stop("O argumento 'ano' deve ser um numero inteiro valido.", call. = FALSE)
   }
   ano <- as.integer(ano)
@@ -315,11 +423,46 @@ gerar_painel_pnadc <- function(ano, vars_tri = NULL, vars_visita = NULL, balance
     stop(sprintf("Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.", ano, ano_atual), call. = FALSE)
   }
 
-  chaves_obrig_tri <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF", "Ano", "Trimestre")
-  vars_tri_proc <- if (is.null(vars_tri)) vars_tri_default else if (is.character(vars_tri) && length(vars_tri) == 1L && tolower(vars_tri) %in% c("all", "todas", "tudo")) NULL else unique(c(chaves_obrig_tri, vars_tri))
+  # Validação de flags logicas
+  if (!is.logical(balancear) || length(balancear) != 1L || is.na(balancear)) {
+    stop("O argumento 'balancear' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
+  if (!is.logical(low_memory) || length(low_memory) != 1L || is.na(low_memory)) {
+    stop("O argumento 'low_memory' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
+  if (!is.logical(verbose) || length(verbose) != 1L || is.na(verbose)) {
+    stop("O argumento 'verbose' deve ser um unico valor logico (TRUE ou FALSE).", call. = FALSE)
+  }
 
+  # Validação de vars_tri
+  chaves_obrig_tri <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF", "Ano", "Trimestre")
+  if (is.null(vars_tri)) {
+    vars_tri_proc <- vars_tri_default
+  } else if (is.character(vars_tri)) {
+    if (length(vars_tri) == 0L) stop("O argumento 'vars_tri' nao pode ser um vetor vazio.", call. = FALSE)
+    if (length(vars_tri) == 1L && tolower(vars_tri) %in% c("all", "todas", "tudo")) {
+      vars_tri_proc <- NULL
+    } else {
+      vars_tri_proc <- unique(c(chaves_obrig_tri, vars_tri))
+    }
+  } else {
+    stop("O argumento 'vars_tri' deve ser NULL, 'todas' ou um vetor de caracteres com nomes de variaveis.", call. = FALSE)
+  }
+
+  # Validação de vars_visita
   chaves_obrig_visita <- c("UPA", "V1008", "V1014", "Ano", "UF")
-  vars_visita_proc <- if (is.null(vars_visita)) vars_visita_default else if (is.character(vars_visita) && length(vars_visita) == 1L && tolower(vars_visita) %in% c("all", "todas", "tudo")) NULL else unique(c(chaves_obrig_visita, vars_visita))
+  if (is.null(vars_visita)) {
+    vars_visita_proc <- vars_visita_default
+  } else if (is.character(vars_visita)) {
+    if (length(vars_visita) == 0L) stop("O argumento 'vars_visita' nao pode ser um vetor vazio.", call. = FALSE)
+    if (length(vars_visita) == 1L && tolower(vars_visita) %in% c("all", "todas", "tudo")) {
+      vars_visita_proc <- NULL
+    } else {
+      vars_visita_proc <- unique(c(chaves_obrig_visita, vars_visita))
+    }
+  } else {
+    stop("O argumento 'vars_visita' deve ser NULL, 'todas' ou um vetor de caracteres com nomes de variaveis.", call. = FALSE)
+  }
 
   painel_pessoas <- baixar_trimestres_pnadc(ano = ano, vars_tri = vars_tri_proc, low_memory = low_memory, verbose = verbose)
   base_habitacao <- consolidar_base_habitacao(ano = ano, vars_visita = vars_visita_proc, verbose = verbose)
