@@ -75,7 +75,7 @@ test_that("gerar_painel_pnadc executa 100% offline via mock provider", {
   expect_true(is.data.frame(painel))
   expect_true("id_dom" %in% names(painel))
   expect_true("id_ind" %in% names(painel))
-  expect_false(is.null(attr(painel, "diagnostico")))
+  expect_true(is.data.frame(diagnosticar_painel(painel)))
 })
 
 test_that("low_memory FALSE vs TRUE e invariante", {
@@ -291,7 +291,6 @@ test_that("gerar_painel_pnadc_mensal gera mes exato e peso mensal calibrado", {
   expect_true(is.data.frame(painel_m))
   expect_true("mes_exato_aaaamm" %in% names(painel_m))
   expect_true("peso_mensal" %in% names(painel_m))
-  expect_equal(attr(painel_m, "taxa_determinacao_mensal"), 100.0)
 })
 
 test_that("construir_crosswalk_pnadc funciona offline com mock", {

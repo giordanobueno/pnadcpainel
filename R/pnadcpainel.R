@@ -533,7 +533,6 @@ gerar_painel_pnadc <- function(ano = NULL, anos = NULL, vars_tri = NULL, vars_vi
     message(">>> Painel longitudinal concluído.")
   }
 
-  attr(painel_final, "diagnostico") <- diag_tb
   painel_final
 }
 
@@ -651,9 +650,6 @@ gerar_painel_pnadc_mensal <- function(
     painel_mensal$mes_exato_aaaamm <- paste0(painel_mensal$Ano, meses_num)
     painel_mensal$ref_month_yyyymm <- painel_mensal$mes_exato_aaaamm
 
-    diag_tb <- attr(painel_trimestral, "diagnostico")
-    attr(painel_mensal, "diagnostico") <- diag_tb
-    attr(painel_mensal, "taxa_determinacao_mensal") <- 100.0
     return(painel_mensal)
   }
 
@@ -689,7 +685,5 @@ gerar_painel_pnadc_mensal <- function(
     message(sprintf(">>> Taxa de determinação de mês exato: %.2f%%", taxa_det))
   }
 
-  attr(painel_mensal, "diagnostico") <- attr(painel_trimestral, "diagnostico")
-  attr(painel_mensal, "taxa_determinacao_mensal") <- taxa_det
   painel_mensal
 }

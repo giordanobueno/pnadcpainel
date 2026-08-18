@@ -40,7 +40,7 @@ painel_2023 <- gerar_painel_pnadc(ano = 2023)
 head(painel_2023)
 
 # Inspecionar a tabela de diagnostico de preenchimento de colunas
-diag_2023 <- attr(painel_2023, "diagnostico")
+diag_2023 <- diagnosticar_painel(painel_2023)
 print(diag_2023)
 ```
 
