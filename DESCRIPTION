@@ -16,7 +16,8 @@ Imports:
     stringr,
     magrittr,
     rlang,
-    stats
+    stats,
+    PNADCperiods
 Suggests:
     testthat (>= 3.0.0),
     withr,

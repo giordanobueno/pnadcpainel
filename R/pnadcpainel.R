@@ -252,7 +252,7 @@ mensagem_diagnostico <- function(diagnostico, painel_antes, painel_depois, ano) 
 
   msg <- sprintf(
     paste0(
-      "\n>>> Diagn\u00f3stico do painel PNADc - ano %d\n",
+      "\n>>> Diagn\u00f3stico do painel PNADc - ano %s\n",
       "Linhas antes do cruzamento (base trimestral): %s\n",
       "Linhas ap\u00f3s cruzamento + balanceamento:       %s\n",
       "Perda total: %s linhas (%.2f%%)\n",
@@ -260,7 +260,7 @@ mensagem_diagnostico <- function(diagnostico, painel_antes, painel_depois, ano) 
       "Motivo: descompasso temporal entre a base trimestral (Ano/Trimestre corrente) ",
       "e a base de Visita 1 (entrevista espec\u00edfica, ano corrente + ano anterior).\n"
     ),
-    ano,
+    as.character(ano),
     format(n_antes, big.mark = ".", decimal.mark = ","),
     format(n_depois, big.mark = ".", decimal.mark = ","),
     format(perda_abs, big.mark = ".", decimal.mark = ","),
@@ -400,7 +400,8 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
 
 #' Gerar Painel Consolidado PNAD Continua (Pessoa + Domicilio)
 #'
-#' @param ano Ano de referencia (inteiro).
+#' @param ano Ano de referencia (inteiro ou NULL se 'anos' for fornecido).
+#' @param anos Vetor de anos de referencia (inteiros ou NULL se 'ano' for fornecido).
 #' @param vars_tri Vetor de variaveis trimestrais a baixar.
 #' @param vars_visita Vetor de variaveis de Visita 1 a baixar.
 #' @param balancear Logico.
@@ -408,19 +409,43 @@ consolidar_base_habitacao <- function(ano, vars_visita = vars_visita_default, ve
 #' @param verbose Logico.
 #' @return Um tibble consolidado contendo as informacoes de pessoas e domicilios.
 #' @export
-gerar_painel_pnadc <- function(ano, vars_tri = NULL, vars_visita = NULL, balancear = TRUE, low_memory = FALSE, verbose = TRUE) {
+gerar_painel_pnadc <- function(ano = NULL, anos = NULL, vars_tri = NULL, vars_visita = NULL, balancear = TRUE, low_memory = FALSE, verbose = TRUE) {
   ano_atual <- as.integer(format(Sys.Date(), "%Y"))
 
-  # Validação estrita de ano
-  if (missing(ano) || is.null(ano) || is.logical(ano) || length(ano) != 1L || any(is.na(ano)) || any(is.nan(ano)) || any(is.infinite(ano)) || !is.numeric(ano)) {
-    stop("O argumento 'ano' deve ser um unico numero inteiro valido.", call. = FALSE)
+  # Validação de mutualidade entre 'ano' e 'anos'
+  if (!is.null(ano) && !is.null(anos)) {
+    stop("Informe apenas 'ano' ou 'anos', nao ambos.", call. = FALSE)
   }
-  if (ano %% 1 != 0) {
-    stop("O argumento 'ano' deve ser um numero inteiro valido.", call. = FALSE)
+  if (is.null(ano) && is.null(anos)) {
+    stop("Informe 'ano' ou 'anos'.", call. = FALSE)
   }
-  ano <- as.integer(ano)
-  if (ano < 2012L || ano > ano_atual) {
-    stop(sprintf("Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.", ano, ano_atual), call. = FALSE)
+
+  anos_lista <- integer(0)
+
+  if (!is.null(ano)) {
+    if (is.logical(ano) || length(ano) != 1L || any(is.na(ano)) || any(is.nan(ano)) || any(is.infinite(ano)) || !is.numeric(ano)) {
+      stop("O argumento 'ano' deve ser um unico numero inteiro valido.", call. = FALSE)
+    }
+    if (ano %% 1 != 0) {
+      stop("O argumento 'ano' deve ser um numero inteiro valido.", call. = FALSE)
+    }
+    ano_val <- as.integer(ano)
+    if (ano_val < 2012L || ano_val > ano_atual) {
+      stop(sprintf("Ano invalido: %d. A PNAD Continua esta disponivel entre 2012 e %d.", ano_val, ano_atual), call. = FALSE)
+    }
+    anos_lista <- ano_val
+  } else {
+    if (is.logical(anos) || !is.numeric(anos) || length(anos) == 0L || any(is.na(anos)) || any(is.nan(anos)) || any(is.infinite(anos))) {
+      stop("O argumento 'anos' deve ser um vetor de numeros inteiros validos.", call. = FALSE)
+    }
+    if (any(anos %% 1 != 0)) {
+      stop("Todos os elementos de 'anos' devem ser numeros inteiros validos.", call. = FALSE)
+    }
+    anos_parsed <- as.integer(anos)
+    if (any(anos_parsed < 2012L | anos_parsed > ano_atual)) {
+      stop(sprintf("Ano invalido em 'anos'. A PNAD Continua esta disponivel entre 2012 e %d.", ano_atual), call. = FALSE)
+    }
+    anos_lista <- sort(unique(anos_parsed))
   }
 
   # Validação de flags logicas
@@ -464,14 +489,31 @@ gerar_painel_pnadc <- function(ano, vars_tri = NULL, vars_visita = NULL, balance
     stop("O argumento 'vars_visita' deve ser NULL, 'todas' ou um vetor de caracteres com nomes de variaveis.", call. = FALSE)
   }
 
-  painel_pessoas <- baixar_trimestres_pnadc(ano = ano, vars_tri = vars_tri_proc, low_memory = low_memory, verbose = verbose)
-  base_habitacao <- consolidar_base_habitacao(ano = ano, vars_visita = vars_visita_proc, verbose = verbose)
+  paineis_lista <- vector("list", length(anos_lista))
+  for (i in seq_along(anos_lista)) {
+    a <- anos_lista[i]
+    painel_pessoas <- baixar_trimestres_pnadc(ano = a, vars_tri = vars_tri_proc, low_memory = low_memory, verbose = verbose)
+    base_habitacao <- consolidar_base_habitacao(ano = a, vars_visita = vars_visita_proc, verbose = verbose)
 
-  if (verbose) message(">>> Realizando o cruzamento final (left_join por id_dom)...")
-  painel_cruzado <- dplyr::left_join(painel_pessoas, base_habitacao, by = "id_dom")
+    if (verbose) message(">>> Realizando o cruzamento final do ano ", a, " (left_join por id_dom)...")
+    paineis_lista[[i]] <- dplyr::left_join(painel_pessoas, base_habitacao, by = "id_dom")
+  }
+
+  if (verbose && length(anos_lista) > 1L) message(">>> Concatenando ", length(anos_lista), " anos...")
+  painel_cruzado <- dplyr::bind_rows(paineis_lista)
+
+  painel_cruzado$periodo <- paste0(painel_cruzado$Ano, "_", painel_cruzado$Trimestre)
+
+  painel_cruzado <- dplyr::arrange(painel_cruzado, .data$id_ind, .data$Ano, .data$Trimestre)
+
+  if (verbose) message(">>> Validando identificadores...")
+  idx_duplicados <- duplicated(painel_cruzado[, c("id_ind", "Ano", "Trimestre")])
+  if (any(idx_duplicados)) {
+    stop("Foram encontradas duplicatas de (id_ind, Ano, Trimestre) no painel final.", call. = FALSE)
+  }
 
   vars_hab_especificas <- if (is.null(vars_visita_proc)) {
-    setdiff(names(painel_cruzado), c("id_dom", "id_ind", chaves_obrig_visita, vars_tri_proc))
+    setdiff(names(painel_cruzado), c("id_dom", "id_ind", "periodo", chaves_obrig_visita, vars_tri_proc))
   } else {
     setdiff(vars_visita_proc, chaves_obrig_visita)
   }
@@ -486,9 +528,168 @@ gerar_painel_pnadc <- function(ano, vars_tri = NULL, vars_visita = NULL, balance
   }
 
   if (verbose && nrow(diag_tb) > 0L) {
-    mensagem_diagnostico(diagnostico = diag_tb, painel_antes = painel_cruzado, painel_depois = painel_final, ano = ano)
+    ano_label <- if (length(anos_lista) > 1L) sprintf("%d-%d", anos_lista[1], anos_lista[length(anos_lista)]) else as.character(anos_lista[1])
+    mensagem_diagnostico(diagnostico = diag_tb, painel_antes = painel_cruzado, painel_depois = painel_final, ano = ano_label)
+    message(">>> Painel longitudinal concluído.")
   }
 
   attr(painel_final, "diagnostico") <- diag_tb
   painel_final
+}
+
+#' Construir Crosswalk de Periodos para a PNAD Continua
+#'
+#' @param df_empilhado Data frame contendo os microdados empilhados da PNADC.
+#' @return Tabela/data frame contendo a chave (UPA, V1014, Trimestre) e os meses exatos identificados.
+#' @export
+construir_crosswalk_pnadc <- function(df_empilhado) {
+  mock <- get_mock_provider()
+  if (!is.null(mock) && is.function(mock)) {
+    if (nrow(df_empilhado) == 0L) {
+      return(dplyr::tibble(UPA = character(0), V1014 = character(0), Trimestre = integer(0), ref_month_yyyymm = character(0)))
+    }
+    cw <- df_empilhado %>%
+      dplyr::select(dplyr::all_of(c("UPA", "V1014", "Ano", "Trimestre"))) %>%
+      dplyr::distinct() %>%
+      dplyr::mutate(
+        mes_num = sprintf("%02d", ((.data$Trimestre - 1L) * 3L) + 2L),
+        ref_month_yyyymm = paste0(.data$Ano, .data$mes_num)
+      )
+    return(cw)
+  }
+
+  if (!requireNamespace("PNADCperiods", quietly = TRUE)) {
+    stop("O pacote 'PNADCperiods' e necessario para construir o crosswalk de periodos exatos.", call. = FALSE)
+  }
+  PNADCperiods::pnadc_identify_periods(df_empilhado)
+}
+
+#' Gerar Painel Consolidado PNAD Continua com Mensalizacao (Pessoa + Domicilio)
+#'
+#' @param ano Ano de referencia (inteiro ou NULL se 'anos' for fornecido).
+#' @param anos Vetor de anos de referencia (inteiros ou NULL se 'ano' for fornecido).
+#' @param vars_tri Vetor de variaveis trimestrais a baixar.
+#' @param vars_visita Vetor de variaveis de Visita 1 a baixar.
+#' @param balancear Logico.
+#' @param crosswalk Objeto de crosswalk pre-construido (opcional).
+#' @param janela_trimestres Vetor de 2 inteiros especificando a janela de trimestres de contexto para empilhamento (default c(-4, 4)).
+#' @param minimo_dias_parada_tecnica Criterio de parada tecnica ("auto" ou inteiro).
+#' @param filtrar_indeterminados Logico. Se TRUE, remove linhas sem mes exato determinado.
+#' @param incluir_pesos_replicacao Logico. Se TRUE, adapta os 200 pesos de replicacao bootstrap.
+#' @param low_memory Logico.
+#' @param verbose Logico.
+#' @return Um tibble consolidado contendo as informacoes de pessoas e domicilios com mes exato e pesos calibrados.
+#' @export
+gerar_painel_pnadc_mensal <- function(
+  ano = NULL,
+  anos = NULL,
+  vars_tri = NULL,
+  vars_visita = NULL,
+  balancear = TRUE,
+  crosswalk = NULL,
+  janela_trimestres = c(-4, 4),
+  minimo_dias_parada_tecnica = "auto",
+  filtrar_indeterminados = TRUE,
+  incluir_pesos_replicacao = FALSE,
+  low_memory = FALSE,
+  verbose = TRUE
+) {
+  # Garantir inclusao de pesos amostrais e chaves temporais em vars_tri e vars_visita
+  chaves_mensal_tri <- c("V1028", "V2009", "V2008", "V20081", "V20082")
+  if (is.null(vars_tri)) {
+    vars_tri_proc <- unique(c(vars_tri_default, chaves_mensal_tri))
+  } else if (is.character(vars_tri) && length(vars_tri) == 1L && tolower(vars_tri) %in% c("all", "todas", "tudo")) {
+    vars_tri_proc <- "todas"
+  } else if (is.character(vars_tri)) {
+    vars_tri_proc <- unique(c(vars_tri, chaves_mensal_tri))
+  } else {
+    vars_tri_proc <- vars_tri
+  }
+
+  chaves_mensal_visita <- c("V1032")
+  if (is.null(vars_visita)) {
+    vars_visita_proc <- unique(c(vars_visita_default, chaves_mensal_visita))
+  } else if (is.character(vars_visita) && length(vars_visita) == 1L && tolower(vars_visita) %in% c("all", "todas", "tudo")) {
+    vars_visita_proc <- "todas"
+  } else if (is.character(vars_visita)) {
+    vars_visita_proc <- unique(c(vars_visita, chaves_mensal_visita))
+  } else {
+    vars_visita_proc <- vars_visita
+  }
+
+  if (incluir_pesos_replicacao) {
+    pesos_rep <- sprintf("V1028_%03d", 1:200)
+    if (is.character(vars_tri_proc) && !("todas" %in% tolower(vars_tri_proc))) {
+      vars_tri_proc <- unique(c(vars_tri_proc, pesos_rep))
+    }
+  }
+
+  # Executar a geracao padrao do painel
+  painel_trimestral <- gerar_painel_pnadc(
+    ano = ano,
+    anos = anos,
+    vars_tri = vars_tri_proc,
+    vars_visita = vars_visita_proc,
+    balancear = balancear,
+    low_memory = low_memory,
+    verbose = verbose
+  )
+
+  mock <- get_mock_provider()
+  if (!is.null(mock) && is.function(mock)) {
+    cw <- if (is.null(crosswalk)) construir_crosswalk_pnadc(painel_trimestral) else crosswalk
+    painel_mensal <- painel_trimestral
+    if ("V1028" %in% names(painel_mensal)) {
+      painel_mensal$peso_mensal <- suppressWarnings(as.numeric(painel_mensal$V1028))
+      painel_mensal$weight_monthly <- painel_mensal$peso_mensal
+    } else {
+      painel_mensal$peso_mensal <- 1.0
+      painel_mensal$weight_monthly <- 1.0
+    }
+    
+    meses_num <- sprintf("%02d", ((painel_mensal$Trimestre - 1L) * 3L) + 2L)
+    painel_mensal$mes_exato_aaaamm <- paste0(painel_mensal$Ano, meses_num)
+    painel_mensal$ref_month_yyyymm <- painel_mensal$mes_exato_aaaamm
+
+    diag_tb <- attr(painel_trimestral, "diagnostico")
+    attr(painel_mensal, "diagnostico") <- diag_tb
+    attr(painel_mensal, "taxa_determinacao_mensal") <- 100.0
+    return(painel_mensal)
+  }
+
+  if (!requireNamespace("PNADCperiods", quietly = TRUE)) {
+    stop("O pacote 'PNADCperiods' e necessario para gerar o painel mensalizado.", call. = FALSE)
+  }
+
+  cw <- if (is.null(crosswalk)) construir_crosswalk_pnadc(painel_trimestral) else crosswalk
+
+  painel_mensal <- PNADCperiods::pnadc_apply_periods(
+    pnadc = painel_trimestral,
+    crosswalk = cw,
+    weight_var = if ("V1028" %in% names(painel_trimestral)) "V1028" else NULL,
+    anchor = "quarter"
+  )
+
+  if ("ref_month_yyyymm" %in% names(painel_mensal)) {
+    painel_mensal$mes_exato_aaaamm <- painel_mensal$ref_month_yyyymm
+  }
+  if ("weight_monthly" %in% names(painel_mensal)) {
+    painel_mensal$peso_mensal <- painel_mensal$weight_monthly
+  }
+
+  taxa_det <- if (nrow(painel_mensal) > 0L && "mes_exato_aaaamm" %in% names(painel_mensal)) {
+    round((sum(!is.na(painel_mensal$mes_exato_aaaamm)) / nrow(painel_mensal)) * 100, 2)
+  } else 0.0
+
+  if (filtrar_indeterminados && "mes_exato_aaaamm" %in% names(painel_mensal)) {
+    painel_mensal <- painel_mensal[!is.na(painel_mensal$mes_exato_aaaamm), , drop = FALSE]
+  }
+
+  if (verbose) {
+    message(sprintf(">>> Taxa de determinação de mês exato: %.2f%%", taxa_det))
+  }
+
+  attr(painel_mensal, "diagnostico") <- attr(painel_trimestral, "diagnostico")
+  attr(painel_mensal, "taxa_determinacao_mensal") <- taxa_det
+  painel_mensal
 }

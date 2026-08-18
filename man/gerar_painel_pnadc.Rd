@@ -5,7 +5,8 @@
 \title{Gerar Painel Consolidado PNAD Continua (Pessoa + Domicilio)}
 \usage{
 gerar_painel_pnadc(
-  ano,
+  ano = NULL,
+  anos = NULL,
   vars_tri = NULL,
   vars_visita = NULL,
   balancear = TRUE,
@@ -14,7 +15,9 @@ gerar_painel_pnadc(
 )
 }
 \arguments{
-\item{ano}{Ano de referencia (inteiro). Deve estar entre 2012 e o ano atual.}
+\item{ano}{Ano de referencia (inteiro ou NULL se \code{anos} for fornecido).}
+
+\item{anos}{Vetor de anos de referencia (inteiros ou NULL se \code{ano} for fornecido).}
 
 \item{vars_tri}{Vetor de variaveis trimestrais a baixar. Se NULL (padrao),
 utiliza \code{vars_tri_default}. Se \code{"todas"}, \code{"all"} ou \code{"tudo"},
