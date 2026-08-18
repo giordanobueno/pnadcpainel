@@ -506,10 +506,10 @@ gerar_painel_pnadc <- function(ano = NULL, anos = NULL, vars_tri = NULL, vars_vi
 
   painel_cruzado <- dplyr::arrange(painel_cruzado, .data$id_ind, .data$Ano, .data$Trimestre)
 
-  if (verbose) message(">>> Validando identificadores...")
   idx_duplicados <- duplicated(painel_cruzado[, c("id_ind", "Ano", "Trimestre")])
   if (any(idx_duplicados)) {
-    stop("Foram encontradas duplicatas de (id_ind, Ano, Trimestre) no painel final.", call. = FALSE)
+    warning(sprintf("Foram encontradas %d linhas duplicadas na chave (id_ind, Ano, Trimestre) (causadas por gemeos ou perfis demograficos identicos no mesmo domicilio). As duplicatas foram removidas para garantir a integridade do painel.", sum(idx_duplicados)), call. = FALSE)
+    painel_cruzado <- painel_cruzado[!idx_duplicados, , drop = FALSE]
   }
 
   vars_hab_especificas <- if (is.null(vars_visita_proc)) {
