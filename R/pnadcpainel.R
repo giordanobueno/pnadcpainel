@@ -119,7 +119,7 @@ downcast_pnadc <- function(df) {
 #' @param dados Data frame contendo os microdados da PNADc.
 #' @return Data frame com id_dom e id_ind adicionados.
 #' @export
-criar_ids_datazoom <- function(dados) {
+criar_ids_datazoom <- function(dados, preservar_colunas = NULL) {
   chaves_obrig <- c("UPA", "V1008", "V1014", "V2008", "V20081", "V20082", "V2007", "UF")
   faltantes <- setdiff(chaves_obrig, names(dados))
   if (length(faltantes) > 0L) {
@@ -160,12 +160,14 @@ criar_ids_datazoom <- function(dados) {
 
   df_valido <- df[mascara_valida, , drop = FALSE]
 
+  cols_remov <- setdiff(c("V2008", "V20081", "V20082"), preservar_colunas)
+
   if (nrow(df_valido) == 0L) {
     df_res <- df_valido
     df_res$id_dom <- character(0)
     df_res$id_ind <- character(0)
-    cols_remov <- intersect(c("V2008", "V20081", "V20082"), names(df_res))
-    if (length(cols_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_remov, drop = FALSE]
+    cols_a_remov <- intersect(cols_remov, names(df_res))
+    if (length(cols_a_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_a_remov, drop = FALSE]
     return(df_res)
   }
 
@@ -185,8 +187,8 @@ criar_ids_datazoom <- function(dados) {
   df_res$id_dom <- id_dom
   df_res$id_ind <- id_ind
 
-  cols_remov <- intersect(c("V2008", "V20081", "V20082"), names(df_res))
-  if (length(cols_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_remov, drop = FALSE]
+  cols_a_remov <- intersect(cols_remov, names(df_res))
+  if (length(cols_a_remov) > 0L) df_res <- df_res[, !names(df_res) %in% cols_a_remov, drop = FALSE]
 
   df_res
 }
@@ -336,7 +338,7 @@ baixar_trimestres_pnadc <- function(ano, vars_tri = vars_tri_default, low_memory
     dados_brutos <- get_pnadc_internal(year = ano, quarter = tri, vars = vars_tri, design = FALSE, labels = FALSE, verbose = verbose)
     if (is.null(dados_brutos) || nrow(dados_brutos) == 0L) stop(sprintf("Download vazio ou nulo para o Trimestre %d de %d.", tri, ano))
     dados_brutos <- downcast_pnadc(dados_brutos)
-    lista_painel[[tri]] <- criar_ids_datazoom(dados_brutos)
+    lista_painel[[tri]] <- criar_ids_datazoom(dados_brutos, preservar_colunas = vars_tri)
   }
   dplyr::bind_rows(lista_painel)
 }
